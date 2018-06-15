@@ -1,7 +1,10 @@
 #include <iostream>
 #include <cstdlib>
+#include <cstring>
+#include <string>
 
 #include "symbols.hpp"
+#include "string_util.hpp"
 
 enum DataType {
   TYPE_DATA,
@@ -23,6 +26,7 @@ public:
   
   Data& operator*() const { return *raw; }
   Data* operator->() const { return raw; }
+  operator bool() const { return raw; }
 
   template<class T>
   T* as() const {
@@ -33,19 +37,6 @@ public:
   T& deref() const {
     return *as<T>();
   }
-};
-
-struct Cell : Data {
-  Ptr car, cdr;
-};
-
-struct Symbol : Data {
-  const char* value;
-};
-
-struct String : Data {
-  const char* data;
-  size_t length;
 };
 
 template <class T>
@@ -60,28 +51,81 @@ Ptr make_data(Args... args) {
   return p;
 }
 
-Ptr make_string(const char* s) {
-  return make_data<String>(TYPE_STRING, s, std::strlen(s));
+struct Cell : Data {
+  Ptr car, cdr;
+/*
+  const char* display_list_items(std::string& s, bool first) const {
+    
+  }
+
+  const char* display_list() const {
+    std::string s;
+    s += '(';
+    s += display_list_items();
+    s += ')';
+    return s;
+  }
+  */
+};
+
+
+struct Symbol : Data {
+  const char* value;
+};
+
+struct String : Data {
+  const char* data;
+  size_t length;
+  
+  static char* alloc_data(size_t n) {
+    return (char*)std::malloc(n + 1);
+  }
+
+  static void dealloc_data(char* p) {
+    std::free(p);
+  }
+
+  template <class... Ts>
+  static String from(Ts... srcs) {
+    size_t length = (0 + ... + std::strlen(srcs));
+    char* data = alloc_data(length);
+    concat_strings(data, srcs...);
+    return { TYPE_STRING, data, length };
+  }
+};
+
+template <class... Ts>
+Ptr make_string(Ts... srcs) {
+  Ptr p = data_alloc<String>();
+  p.deref<String>() = String::from(srcs...);
+  return p;
 }
 
-Ptr display(Ptr data) {
+template <class... Ptrs>
+Ptr concat(Ptrs... ptrs) {
+  Ptr p = data_alloc<String>();
+  p.deref<String>() = String::from(ptrs.template as<String>()->data...);
+  return p;
+} 
+
+const char* display(Ptr data) {
   switch (data->type) {
     case TYPE_DATA:
-      return make_string("<Data>");
+      return "<Data>";
 
     case TYPE_CELL:
-      return make_string("<Cell>");
+      return "<Cell>";
 
     case TYPE_SYMBOL:
-      return make_string(data.as<Symbol>()->value);
+      return data.as<Symbol>()->value;
 
     case TYPE_STRING:
-      return data; //fixme
+      return data.as<String>()->data; //"data"?
   }
 }
 
 void print(Ptr data) {
-  std::cout << display(data).deref<String>().data;
+  std::cout << display(data);
 }
 
 void println(Ptr data) {
@@ -90,6 +134,7 @@ void println(Ptr data) {
 }
 
 int main() {
-  println(make_data<Symbol>(TYPE_SYMBOL, "symbol"));
   return 0;
 }
+
+
